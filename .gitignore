@@ -1,0 +1,7 @@
+.DS_Store
+.Rhistory
+**/__pycache__
+ignore/**
+README.html
+testing.ipynb
+.ipynb_checkpoints
