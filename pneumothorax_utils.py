@@ -139,8 +139,9 @@ hline = u'\u2500'*83
 
 def current_time_str(zone_offset = -7):
     date = datetime.today() + timedelta(hours=zone_offset)
-    suffix = 'PM' if date.hour > 12 else 'AM'
-    return '{:02d}:{:02d} {}'.format(date.hour%12, date.minute, suffix)
+    suffix = 'PM' if date.hour >= 12 else 'AM'
+    hour = date.hour%12 if date.hour%12 else 12
+    return '{:02d}:{:02d} {}'.format(hour, date.minute, suffix)
 
 def verify_gcs_path(GCS_PATH, renew_url):
     try: tf.io.gfile.glob(GCS_PATH + '/*')[0]
@@ -149,7 +150,7 @@ def verify_gcs_path(GCS_PATH, renew_url):
         raise Exception('GCS path has expired. Follow this link to renew: ' + renew_url) from None
     print('GCS path is valid')
     return None
-    
+
 # time_passed = lambda start_time: strftime("%M:%S", gmtime(time() - start_time))
 def time_passed(start_time):
   secs = time() - start_time
