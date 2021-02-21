@@ -23,7 +23,7 @@ This approach achieves a Dice coefficient of 0.8521 in the offcial private test 
 
 #### About the Dataset
 
-To train using TPUs, I extracted the original data from DICOM files (X-Rays, patient metadata) and CSV files (mask RLE encodings) and placed it in TFRec files. The original DICOM and CSV data can be found [here](). The TFRecs used in the notebook can be found [here](https://www.kaggle.com/reyvaz/siimacr-pneumothorax-segmentation-tfrecs).
+To train using TPUs, I extracted the original data from DICOM files (X-Rays, patient metadata) and CSV files (mask RLE encodings) and placed it in TFRec files. The original DICOM and CSV data can be found [here](https://www.kaggle.com/seesee/siim-train-test). The TFRecs used in the notebook can be found [here](https://www.kaggle.com/reyvaz/siimacr-pneumothorax-segmentation-tfrecs).
 
 #### Acknowledgements:
 
