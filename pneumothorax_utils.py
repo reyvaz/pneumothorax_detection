@@ -151,7 +151,6 @@ def verify_gcs_path(GCS_PATH, renew_url):
     print('GCS path is valid')
     return None
 
-# time_passed = lambda start_time: strftime("%M:%S", gmtime(time() - start_time))
 def time_passed(start_time):
   secs = time() - start_time
   if secs < 3600: elapsed = strftime("%M:%S", gmtime(secs))
