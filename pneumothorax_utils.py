@@ -5,82 +5,50 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix
 from datetime import datetime, timedelta
 from time import time, strftime, gmtime
+from IPython.display import display, HTML
 
-def cm_plot(cm, labels, p_size = 8, cmap = plt.cm.Reds, contrast = 4,
-            subtitle = '', save_fig = False, fontweight = 'normal'):
+metrics_keys = ['Accuracy', 'Sensitivity', 'Specificity', 'Total Observations',
+                'Predicted', 'Correct Predictions', 'Incorrect Predictions',
+                'Inconclusive', 'Rate Inconclusive',
+                'True Positives', 'True Negatives', 'False Positives',
+                'False Negatives']
+
+def performance_metrics(targets, preds_prob, neg_thresh = 0.2, pos_thresh = 0.8,
+                       report_type = 'high_confidence'):
     '''
-    Plots a heatmap of the confusion matrix
+    Calculates binary performance metrics
+        targets: a pandas series, a list, or a 1-dim numpy array with
+            ground-truth labels.
+        preds_prob: a pandas series, a list, or a 1-dim numpy array with
+            predicted probabilities.
+        neg_thresh; (float) the lower cutoff threshold for negative predictions
+        pos_thresh: (float) the upper cutoff threshold for positive predictions
+            thresholds for predictions, respectively.
+        report_type: (str) one of 'high_confidence', 'inconclusive', 'total'
+            'total': will evaluate performance on the entire data using 0.5 as
+                prediction threshold.
+            'high_confidence': will evaluate performance only on the threshold
+                bounded predicitons.
+            'inconclusive': will return statistics on the inconclusive
+                predictions according to the thresholds.
 
-    Args:
-        cm: a confusion matrix array. i.e. a sklearn.metrics.confusion_matrix()
-        labels: a list with class labels
-        cmap: a color map
-        contrast: an integer or float, higher numbers will add weight to lesser
-                    values to incrase their color saturation.
-        subtitle: a string to print below the title
+    Returns: a tuple with:
+        1 dataframe with threshold bounded observations
+        1 confusion matrix for the relevant observations
+        1 dict with metrics for the relevant observations formated as strings
+
+    Created to be used with cm_body_string() to create a performance report
+    table on HTML.
     '''
-    plot_title = '\nConfusion Matrix\n' + subtitle
+    DF = pd.DataFrame({'label':targets, 'preds_prob':preds_prob})
 
-    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    cm_color_vals = np.power(cm_normalized, 1/contrast)
-    cm_color_vals = np.ma.masked_where(cm_color_vals == 0, cm_color_vals)
-    cmap.set_under(color = 'white')
-
-    fig = plt.figure()
-    fig.set_size_inches(p_size, p_size)
-    ax = fig.add_subplot(111)
-
-    ax.imshow(cm_color_vals, cmap=cmap, interpolation='none', vmin=0.00000001)
-    width, height = cm.shape
-    for x in range(width):
-        for y in range(height):
-            cell_norm = cm_normalized[x,y]
-            if cell_norm > 0.99 and cell_norm < 1.: cell_norm = '> 0.99'
-            elif cell_norm > 0 and cell_norm < .01: cell_norm = '< 0.01'
-            else: cell_norm = format(cell_norm, '.2f')
-            cell_text = '{}\n({})'.format(cm[x,y], cell_norm)
-            ax.annotate(cell_text, xy=(y, x),
-                    horizontalalignment='center',
-                    fontweight = 'bold' if cm[x,y] > 0 else 'normal', size=12,
-                    verticalalignment='center',
-                    color='white' if cm_color_vals[x,y] > 0.30 else 'gray')
-
-    ax.set_xticks(np.arange(len(labels)))
-    ax.set_yticks(np.arange(len(labels)))
-    ax.set_xticklabels(labels, fontweight = fontweight, size=13)
-    ax.set_yticklabels(labels, fontweight = fontweight, size=13)
-    ax.set_ylabel('Actual', fontweight = fontweight, size=14)
-    ax.set_xlabel('Predicted', fontweight = fontweight, size=14)
-    for spine in ax.spines.values():
-        spine.set_edgecolor('#f1f1f1')
-
-    title_size = min((p_size+8), 16)
-    plt.title(plot_title, fontweight = 'bold', size=title_size)
-    plt.tight_layout()
-
-    if save_fig:
-        file_name = 'confusion_matrix' + subtitle + '.png'
-        plt.savefig(file_name, format='png', pad_inches=0.1, dpi = 480)
-    plt.show()
-    return None
-
-
-def performance_report(DF, preds_col, neg_thresh = 0.2, pos_thresh = 0.8,
-                       report_type = 'high_confidence', metrics = []):
-    '''
-    report_type: one of 'high_confidence', 'inconclusive', 'total'
-    preds_col: (str) name of the column for predicted probabilities
-    metrics: a list of strings with any of the names of the variables created
-        within the function. i.e. metrics = ['accuracy', 'sensitivity']
-    '''
-    DF = DF[['label', preds_col]].copy()
     if report_type == 'high_confidence':
-        BDF = DF[(DF[preds_col] <= neg_thresh) | (DF[preds_col] >= pos_thresh)]
+        BDF = DF[(DF['preds_prob'] <= neg_thresh) | (DF['preds_prob'] >= pos_thresh)]
     elif report_type == 'total': BDF = DF
     elif report_type == 'inconclusive':
-        BDF = DF[(DF[preds_col] > neg_thresh) & (DF[preds_col] < pos_thresh)]
+        BDF = DF[(DF['preds_prob'] > neg_thresh) & (DF['preds_prob'] < pos_thresh)]
 
-    BDF = BDF.assign(preds_round = np.where(BDF[preds_col] > 0.5, 1, 0))
+    BDF = BDF.assign(preds_round = np.where(BDF['preds_prob'] > 0.5, 1, 0))
     gt = np.array(BDF.label)
     pred = np.array(BDF.preds_round)
     accuracy = accuracy_score(gt, pred)
@@ -95,35 +63,335 @@ def performance_report(DF, preds_col, neg_thresh = 0.2, pos_thresh = 0.8,
     sensitivity = TP/(TP+FN)
     specificity = TN/(TN+FP)
 
-    print('Report from {} Results\n'.format(report_type.replace('_', ' ').title()))
-    print('Accuracy:          {:.2f}%'.format(accuracy*100))
-    print('Sensitivity:       {:.3f}'.format(sensitivity))
-    print('Specificity:       {:.3f}'.format(specificity))
+    metrics_strings = {
+            'Accuracy': '{:.2f}%'.format(accuracy*100),
+            'Sensitivity': '{:.3f}'.format(sensitivity),
+            'Specificity': '{:.3f}'.format(specificity),
+            'True Positives': str(TP),
+            'True Negatives': str(TN),
+            'False Positives': str(FP),
+            'False Negatives': str(FN),
+            'Correct Predictions': str(TN + TP),
+            'Incorrect Predictions': str(FN + FP),
+    }
 
     if report_type == 'high_confidence':
-        print('\nTotal obs:         {}'.format(total))
-        print('Predicted:         {}'.format(determined))
-        print('Inconclusive:      {}'.format(inconclusive))
-        print('Rate Inconclusive: {:.2f}%'.format(rate_inconclusive*100))
+        metrics_strings['Total Observations'] = str(total)
+        metrics_strings['Predicted'] = str(determined)
+        metrics_strings['Inconclusive'] = str(inconclusive)
+        metrics_strings['Rate Inconclusive'] = '{:.2f}%'.format(rate_inconclusive*100)
 
     elif report_type == 'inconclusive':
-        print('\nInconclusive:      {}'.format(determined))
+        metrics_strings['Inconclusive'] = str(determined)
 
     elif report_type == 'total':
-        print('\nTotal obs:         {}'.format(total))
+        metrics_strings['Total Observations'] = str(total)
 
-    print('True Positives:    {}'.format(TP))
-    print('True Negatives:    {}'.format(TN))
-    print('False Positives:   {}'.format(FP))
-    print('False Negatives:   {}\n'.format(FN))
+    cm = confusion_matrix(BDF.label, BDF.preds_round)
+    return BDF, cm, metrics_strings
 
-    output_df = BDF[['label', preds_col, 'preds_round']]
+def metrics_table_html_string(metrics_strings):
+    '''
+    Used the output of performance_metrics() to create the code for a performance
+    metrics table in HTML.
+        metrics_strings: (dict) with metrics names as keys and values as strings
+    '''
+    mkeys = [k for k in metrics_keys if k in metrics_strings]
+    table_string = '<table>\n   <tbody>\n'
+    for k in mkeys:
+        if k == 'Total Observations' or k == 'True Positives':
+            table_string += '\t<tr><td>&emsp;</td><td></td></tr>\n'
+        table_string += '\t<tr><td>{}&emsp;</td><td class="idented">{}</td></tr>\n'.format(k, metrics_strings[k])
+    table_string += '   </tbody>\n</table>'
+    return table_string
 
-    if len(metrics) > 0:
-        scope = locals()
-        metrics_dict = {k: eval(k) for k in metrics}
-        return output_df, metrics_dict
-    else: return output_df
+def cm_html_list(cm, max_rgb = (0, 45, 66), contrast = 0.7, blank_zeros = False,
+                 text_color_thresh = 0.2):
+    '''
+    Calculates cell values to populate a confusion matrix in HTML
+        cm: (numpy array) a (squared) confusion matrix
+        max_rgb: (tuple of ints) with the rgb values for the darkest possible
+            cell in the CM.
+        contrast: (float) adjust to tweak the contrast between cells
+
+    Returns a list of lenght cm.shape[0] containing lists of strings to be used
+        by cm_body_string() to populate CM cells
+    '''
+    mc = np.array(max_rgb)
+    min_rgb = (239, 239, 239)
+    mn = np.array(min_rgb)
+    dist = mn - mc
+    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+    str_list = []
+    for row_v, row_n in zip(cm, cm_normalized):
+        row_list = []
+        for v, n in zip(row_v, row_n):
+            if v == 0: bg_color = (239, 239, 239)
+            else: bg_color = tuple((mc+(dist*(1.-n**contrast))).astype(int))
+            if n > text_color_thresh: txt_color = 'white'
+            else: txt_color = 'grey'
+            if n > 0.99 and n < 1.: n = '(> 0.99)'
+            elif n > 0 and n < .01: n = '(< 0.01)'
+            elif v == 0 and blank_zeros: n = ''; v = ''
+            else: n = '({:.2f})'.format(n)
+            n = '<span class="norm">{}</span>'.format(n)
+            str_cell = [str(bg_color), txt_color] + [str(v), n]
+            row_list += str_cell
+        str_list.append(row_list)
+    return str_list
+
+# html base for 2 columns
+html_report_base = '''
+<style>
+.column {float: left; width: 320px; padding: 10px;}
+.idented {text-indent: 1em;}
+</style>
+<h3>Performance Report</h3>
+<div>
+    <div class="column"> <div class="cm"> %s </div> </div>
+    <div class="column"> <div class="cm"> %s </div> </div>
+</div>
+'''
+
+cm_css = '''
+.cm {height: 250px; display:table-cell; vertical-align:middle;}
+.tg {border-spacing:0;text-align:center; vertical-align:middle}
+.tg td {overflow:hidden; padding:8px 6px; word-break:normal;}
+.tg th {overflow:hidden; word-break:normal;}
+.ver_text {transform: rotate(-90deg);}
+.norm {font-size:11.5px}'''
+
+cm_header = '''
+<table class="tg">
+<thead>
+    <tr>
+      <th class="tg" colspan="2" rowspan="2"></th>
+      <th class="tg" colspan="%s">Confusion Matrix<br><span class="norm">%s</span></th>
+    </tr>
+    <tr><td class="tg" colspan="%s">Predicted</td></tr>
+</thead>
+<tbody>
+    '''
+cm_footer = '''
+    <tr>
+      <td class="tg"></td>
+      <td class="tg"></td>
+      %s
+    </tr>
+</tbody>
+</table>
+    '''
+
+# base for one cell of cm values
+cm_cell_base = '<td class="tg" style="background-color:rgb%s; color:%s">%s<br>%s</td>'
+
+def confusion_matrix_html(cm, classes = 'default', show_cm = True, title = '',
+                          max_rgb = (0, 45, 65), contrast = 0.7,
+                          blank_zeros = False, text_color_thresh = 0.2,
+                          incl_css = True, break_labels = True,
+                          html_file = False):
+    '''
+    Creates a string with the HTML code for a confusion matrix
+    Args:
+        cm: (numpy array) a square array confusion matrix
+        classes: 'default' or a list of classes
+        show_cm: (bool) if True, it will display the confusion matrix
+            it requires `display` and `HTML` from `IPython.display`
+        title: (str)
+        max_rgb: (tuple of ints) with the rgb values for the darkest possible
+            cell in the confusion matrix. Recommended at least 2 values to be
+            less than 100
+        contrast: (float) adjust to tweak the contrast between cells
+        blank_zeros: (bool) if True, it will leave blank cells with 0s
+        text_color_thresh: (float) adjust to improve visibility of text in
+            colored cells
+        incl_css: if True, the output string will include additional CSS code
+            for formatting confusion matrix cells.
+        break_labels: (bool) if True, it will break class names at spaces
+        html_file: False or str. If str, it will save the html code to a file.
+            if no extension is provided it defaults to .html.
+
+    Returns: a string containing the full html code for a confusion matrix
+    '''
+    cell_vals = cm_html_list(cm, max_rgb, contrast, blank_zeros, text_color_thresh)
+    if classes == 'default':
+        classes = ['Class {}'.format(i+1) for i in range(cm.shape[0])]
+
+    if break_labels: classes = [x.replace(' ', '<br>') for x in classes]
+    n_classes = len(classes)
+
+    if incl_css: header = '<style>{}\n</style>{}'.format(cm_css, cm_header)
+    else: header = cm_header
+    header = header % (n_classes, title, n_classes)
+
+    row_string_for_data = cm_cell_base*n_classes
+
+    data_string = ''
+    for i, (c, row) in enumerate(zip(classes, cell_vals)):
+        start_row = '<tr>\n'
+        if i == 0:
+            start_row += '\t<td class="tg ver_text" rowspan="%s">Actual</td>\n' % n_classes
+        fill_row = '\t<td class="tg">%s</td>%s</tr>' % (c, row_string_for_data)
+        fill_row = fill_row % tuple(row)
+
+        data_string += start_row + fill_row
+
+    footer_classes = '<td class="tg" style="width: 60px;">%s</td>'*n_classes
+    footer =  cm_footer % footer_classes
+    footer =  footer % tuple(classes)
+    cm_string = header + data_string + footer
+    if html_file:
+        assert isinstance(html_file, str), 'html_file var must be False or a string'
+        if '.' not in html_file: html_file = html_file + '.html'
+        with open(html_file, 'w') as H: H.write(cm_string)
+    if show_cm: display(HTML(cm_string))
+    return cm_string
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def cm_plot(cm, labels, p_size = 8, cmap = plt.cm.Reds, contrast = 4,
+#             subtitle = '', save_fig = False, fontweight = 'normal'):
+#     '''
+#     Plots a heatmap of the confusion matrix
+#
+#     Args:
+#         cm: a confusion matrix array. i.e. a sklearn.metrics.confusion_matrix()
+#         labels: a list with class labels
+#         cmap: a color map
+#         contrast: an integer or float, higher numbers will add weight to lesser
+#                     values to incrase their color saturation.
+#         subtitle: a string to print below the title
+#     '''
+#     plot_title = '\nConfusion Matrix\n' + subtitle
+#
+#     cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+#     cm_color_vals = np.power(cm_normalized, 1/contrast)
+#     cm_color_vals = np.ma.masked_where(cm_color_vals == 0, cm_color_vals)
+#     cmap.set_under(color = 'white')
+#
+#     fig = plt.figure()
+#     fig.set_size_inches(p_size, p_size)
+#     ax = fig.add_subplot(111)
+#
+#     ax.imshow(cm_color_vals, cmap=cmap, interpolation='none', vmin=0.00000001)
+#     width, height = cm.shape
+#     for x in range(width):
+#         for y in range(height):
+#             cell_norm = cm_normalized[x,y]
+#             if cell_norm > 0.99 and cell_norm < 1.: cell_norm = '> 0.99'
+#             elif cell_norm > 0 and cell_norm < .01: cell_norm = '< 0.01'
+#             else: cell_norm = format(cell_norm, '.2f')
+#             cell_text = '{}\n({})'.format(cm[x,y], cell_norm)
+#             ax.annotate(cell_text, xy=(y, x),
+#                     horizontalalignment='center',
+#                     fontweight = 'bold' if cm[x,y] > 0 else 'normal', size=12,
+#                     verticalalignment='center',
+#                     color='white' if cm_color_vals[x,y] > 0.30 else 'gray')
+#
+#     ax.set_xticks(np.arange(len(labels)))
+#     ax.set_yticks(np.arange(len(labels)))
+#     ax.set_xticklabels(labels, fontweight = fontweight, size=13)
+#     ax.set_yticklabels(labels, fontweight = fontweight, size=13)
+#     ax.set_ylabel('Actual', fontweight = fontweight, size=14)
+#     ax.set_xlabel('Predicted', fontweight = fontweight, size=14)
+#     for spine in ax.spines.values():
+#         spine.set_edgecolor('#f1f1f1')
+#
+#     title_size = min((p_size+8), 16)
+#     plt.title(plot_title, fontweight = 'bold', size=title_size)
+#     plt.tight_layout()
+#
+#     if save_fig:
+#         file_name = 'confusion_matrix' + subtitle + '.png'
+#         plt.savefig(file_name, format='png', pad_inches=0.1, dpi = 480)
+#     plt.show()
+#     return None
+#
+#
+# def performance_report(DF, preds_col, neg_thresh = 0.2, pos_thresh = 0.8,
+#                        report_type = 'high_confidence', metrics = []):
+#     '''
+#     report_type: one of 'high_confidence', 'inconclusive', 'total'
+#     preds_col: (str) name of the column for predicted probabilities
+#     metrics: a list of strings with any of the names of the variables created
+#         within the function. i.e. metrics = ['accuracy', 'sensitivity']
+#     '''
+#     DF = DF[['label', preds_col]].copy()
+#     if report_type == 'high_confidence':
+#         BDF = DF[(DF[preds_col] <= neg_thresh) | (DF[preds_col] >= pos_thresh)]
+#     elif report_type == 'total': BDF = DF
+#     elif report_type == 'inconclusive':
+#         BDF = DF[(DF[preds_col] > neg_thresh) & (DF[preds_col] < pos_thresh)]
+#
+#     BDF = BDF.assign(preds_round = np.where(BDF[preds_col] > 0.5, 1, 0))
+#     gt = np.array(BDF.label)
+#     pred = np.array(BDF.preds_round)
+#     accuracy = accuracy_score(gt, pred)
+#     total = DF.shape[0]
+#     determined = BDF.shape[0]
+#     inconclusive = total - determined
+#     rate_inconclusive = inconclusive/total
+#     TP = np.sum((gt == 1)*(pred == 1))
+#     TN = np.sum((gt == 0)*(pred == 0))
+#     FP = np.sum((gt == 0)*(pred == 1))
+#     FN = np.sum((gt == 1)*(pred == 0))
+#     sensitivity = TP/(TP+FN)
+#     specificity = TN/(TN+FP)
+#
+#     print('Report from {} Results\n'.format(report_type.replace('_', ' ').title()))
+#     print('Accuracy:          {:.2f}%'.format(accuracy*100))
+#     print('Sensitivity:       {:.3f}'.format(sensitivity))
+#     print('Specificity:       {:.3f}'.format(specificity))
+#
+#     if report_type == 'high_confidence':
+#         print('\nTotal obs:         {}'.format(total))
+#         print('Predicted:         {}'.format(determined))
+#         print('Inconclusive:      {}'.format(inconclusive))
+#         print('Rate Inconclusive: {:.2f}%'.format(rate_inconclusive*100))
+#
+#     elif report_type == 'inconclusive':
+#         print('\nInconclusive:      {}'.format(determined))
+#
+#     elif report_type == 'total':
+#         print('\nTotal obs:         {}'.format(total))
+#
+#     print('True Positives:    {}'.format(TP))
+#     print('True Negatives:    {}'.format(TN))
+#     print('False Positives:   {}'.format(FP))
+#     print('False Negatives:   {}\n'.format(FN))
+#
+#     output_df = BDF[['label', preds_col, 'preds_round']]
+#
+#     if len(metrics) > 0:
+#         scope = locals()
+#         metrics_dict = {k: eval(k) for k in metrics}
+#         return output_df, metrics_dict
+#     else: return output_df
 
 def split_dataset(ds, steps, n_parts = 3):
     len_part = np.ceil(steps/n_parts).astype(int)
