@@ -17,7 +17,7 @@ This approach achieves a Dice coefficient of 0.8521 in the offcial private test 
 
 **Re-running the Notebook**
 
-- Open the notebook in Colab and select TPU as accelerator (recommended).
+- [Open the notebook in Colab](https://githubtocolab.com/reyvaz/pneumothorax_detection/blob/master/notebooks/pneumothorax_detection.ipynb) and select TPU as accelerator (recommended).
 - Update the GCS Path as indicated in the notebook
 - Run all
 
