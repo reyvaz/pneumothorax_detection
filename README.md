@@ -13,7 +13,7 @@ This repo contains my solution to the [SIIM-ACR Pneumothorax Segmentation; Ident
 
 2. The second step, runs the image through an ensemble of Unet (Ronneberger et al., 2015) and Unet ++ (Zhou et al., 2019) networks with EfficientNet backbones to identify the location of the disease. 
 
-This approach achieves a Dice coefficient of 0.8521 in the offcial private test data of the competition, on par with the top 3% of the results. 
+This approach achieves a [Dice coefficient of 0.8522](https://www.kaggle.com/reyvaz/pneumothorax-inference-submission?scriptVersionId=59143042) in the offcial private test data of the competition, on par with the top 3% of the results. 
 
 **Re-running the Notebook**
 
